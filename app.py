@@ -2,11 +2,9 @@ import base64
 import json
 import mimetypes
 import os
-import textwrap
 import time
 import uuid
 from dataclasses import dataclass
-from io import BytesIO
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 from urllib.parse import quote, urlparse
 
@@ -478,124 +476,6 @@ def parse_sse_line(line: str) -> Optional[Dict[str, Any]]:
 # --------------------------------------
 # Download helpers
 # --------------------------------------
-def _escape_pdf_text_value(value: str) -> str:
-    """Escape characters that have special meaning inside PDF strings."""
-    return value.replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)")
-
-
-def create_pdf_from_text(text: str) -> bytes:
-    """Create a simple PDF document that contains the provided text."""
-    cleaned = text or ""
-    page_width = 612  # 8.5in * 72
-    page_height = 792  # 11in * 72
-    margin = 72
-    font_size = 12
-    leading = 16
-    max_chars_per_line = 90
-    available_height = page_height - (2 * margin)
-    max_lines = max(1, int(available_height // leading))
-
-    raw_lines = cleaned.splitlines() or [cleaned]
-    wrapped_lines: List[str] = []
-    for raw_line in raw_lines:
-        stripped = raw_line.rstrip()
-        wrapped = textwrap.wrap(
-            stripped,
-            width=max_chars_per_line,
-            replace_whitespace=False,
-            drop_whitespace=False,
-        )
-        if not wrapped:
-            wrapped_lines.append("")
-        else:
-            wrapped_lines.extend(wrapped)
-    if not wrapped_lines:
-        wrapped_lines = [""]
-
-    pages: List[List[str]] = [
-        wrapped_lines[i : i + max_lines]
-        for i in range(0, len(wrapped_lines), max_lines)
-    ]
-    if not pages:
-        pages = [[""]]
-
-    objects: Dict[int, bytes] = {}
-    next_id = 1
-
-    def _add_object(body: Any = b"") -> int:
-        nonlocal next_id
-        oid = next_id
-        next_id += 1
-        if isinstance(body, bytes):
-            objects[oid] = body
-        else:
-            objects[oid] = str(body).encode("latin-1", "replace")
-        return oid
-
-    def _set_object(oid: int, body: Any) -> None:
-        if isinstance(body, bytes):
-            objects[oid] = body
-        else:
-            objects[oid] = str(body).encode("latin-1", "replace")
-
-    catalog_id = _add_object()
-    pages_id = _add_object()
-    font_id = _add_object(
-        "<< /Type /Font /Subtype /Type1 /Name /F1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>"
-    )
-
-    page_ids: List[int] = []
-    for page_lines in pages:
-        lines_for_page = page_lines or [""]
-        ops = [
-            "BT",
-            f"/F1 {font_size} Tf",
-            f"{leading} TL",
-            f"{margin} {page_height - margin} Td",
-        ]
-        for idx, line in enumerate(lines_for_page):
-            if idx > 0:
-                ops.append("T*")
-            ops.append(f"({_escape_pdf_text_value(line)}) Tj")
-        ops.append("ET")
-        stream_bytes = "\n".join(ops).encode("latin-1", "replace")
-        content_stream = (
-            f"<< /Length {len(stream_bytes)} >>\nstream\n".encode("latin-1")
-            + stream_bytes
-            + b"\nendstream"
-        )
-        content_id = _add_object(content_stream)
-        page_dict = (
-            f"<< /Type /Page /Parent {pages_id} 0 R /MediaBox [0 0 {page_width} {page_height}] "
-            f"/Contents {content_id} 0 R /Resources << /Font << /F1 {font_id} 0 R >> >> >>"
-        )
-        page_ids.append(_add_object(page_dict))
-
-    kids = " ".join(f"{pid} 0 R" for pid in page_ids)
-    _set_object(pages_id, f"<< /Type /Pages /Count {len(page_ids)} /Kids [{kids}] >>")
-    _set_object(catalog_id, f"<< /Type /Catalog /Pages {pages_id} 0 R >>")
-
-    output = BytesIO()
-    output.write(b"%PDF-1.4\n")
-    positions = [0] * next_id
-    for oid in range(1, next_id):
-        positions[oid] = output.tell()
-        output.write(f"{oid} 0 obj\n".encode("latin-1"))
-        output.write(objects[oid])
-        output.write(b"\nendobj\n")
-    xref_offset = output.tell()
-    output.write(f"xref\n0 {next_id}\n".encode("latin-1"))
-    output.write(b"0000000000 65535 f \n")
-    for oid in range(1, next_id):
-        output.write(f"{positions[oid]:010d} 00000 n \n".encode("latin-1"))
-    output.write(
-        f"trailer\n<< /Size {next_id} /Root {catalog_id} 0 R >>\nstartxref\n{xref_offset}\n%%EOF".encode(
-            "latin-1"
-        )
-    )
-    return output.getvalue()
-
-
 def extract_text_from_parts(parts: Sequence[Dict[str, Any]]) -> str:
     """Collect the textual segments from message parts."""
     texts: List[str] = []
@@ -613,32 +493,56 @@ def extract_text_from_parts(parts: Sequence[Dict[str, Any]]) -> str:
 
 
 def render_download_controls(text: str, filename_prefix: str, key_suffix: str) -> None:
-    """Render download buttons for plain-text and PDF exports."""
+    """Render a stylized download control for the plain-text export."""
     safe_text = (text or "").strip()
     if not safe_text:
         return
     safe_prefix = (filename_prefix or "cbai-response").strip().replace(" ", "-") or "cbai-response"
     txt_bytes = safe_text.encode("utf-8")
-    pdf_bytes = create_pdf_from_text(safe_text)
-    col1, col2 = st.columns(2)
-    with col1:
-        st.download_button(
-            "⬇️ Download .txt",
-            data=txt_bytes,
-            file_name=f"{safe_prefix}.txt",
-            mime="text/plain",
-            key=f"txt_{key_suffix}",
-            use_container_width=True,
-        )
-    with col2:
-        st.download_button(
-            "⬇️ Download .pdf",
-            data=pdf_bytes,
-            file_name=f"{safe_prefix}.pdf",
-            mime="application/pdf",
-            key=f"pdf_{key_suffix}",
-            use_container_width=True,
-        )
+    encoded = base64.b64encode(txt_bytes).decode("utf-8")
+    container_id = f"cbai-download-{key_suffix}"
+    button_html = f"""
+        <style>
+            #{container_id} {{
+                margin: 0.5rem 0 1rem 0;
+                padding: 1rem;
+                border-radius: 14px;
+                border: 1px solid rgba(99, 102, 241, 0.3);
+                background: linear-gradient(135deg, rgba(99,102,241,0.08), rgba(139,92,246,0.08));
+            }}
+            #{container_id} .download-title {{
+                font-size: 0.85rem;
+                letter-spacing: 0.04em;
+                text-transform: uppercase;
+                color: #5a4ab8;
+                margin-bottom: 0.35rem;
+            }}
+            #{container_id} .download-btn {{
+                display: inline-flex;
+                align-items: center;
+                gap: 0.45rem;
+                padding: 0.6rem 1.5rem;
+                border-radius: 999px;
+                border: none;
+                background: linear-gradient(120deg, #6f6cf6, #a855f7);
+                color: white;
+                font-weight: 600;
+                font-size: 0.95rem;
+                text-decoration: none;
+                box-shadow: 0 8px 20px rgba(111, 108, 246, 0.35);
+                transition: transform 0.15s ease, box-shadow 0.15s ease;
+            }}
+            #{container_id} .download-btn:hover {{
+                transform: translateY(-1px);
+                box-shadow: 0 12px 24px rgba(111, 108, 246, 0.45);
+            }}
+        </style>
+        <div id="{container_id}">
+            <div class="download-title">Save this AI summary</div>
+            <a class="download-btn" download="{safe_prefix}.txt" href="data:text/plain;base64,{encoded}">⬇️ Download as TXT</a>
+        </div>
+    """
+    st.markdown(button_html, unsafe_allow_html=True)
 
 
 # --------------------------------------
