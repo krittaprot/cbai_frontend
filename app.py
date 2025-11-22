@@ -2,9 +2,11 @@ import base64
 import json
 import mimetypes
 import os
+import textwrap
 import time
 import uuid
 from dataclasses import dataclass
+from io import BytesIO
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 from urllib.parse import quote, urlparse
 
@@ -474,6 +476,172 @@ def parse_sse_line(line: str) -> Optional[Dict[str, Any]]:
 
 
 # --------------------------------------
+# Download helpers
+# --------------------------------------
+def _escape_pdf_text_value(value: str) -> str:
+    """Escape characters that have special meaning inside PDF strings."""
+    return value.replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)")
+
+
+def create_pdf_from_text(text: str) -> bytes:
+    """Create a simple PDF document that contains the provided text."""
+    cleaned = text or ""
+    page_width = 612  # 8.5in * 72
+    page_height = 792  # 11in * 72
+    margin = 72
+    font_size = 12
+    leading = 16
+    max_chars_per_line = 90
+    available_height = page_height - (2 * margin)
+    max_lines = max(1, int(available_height // leading))
+
+    raw_lines = cleaned.splitlines() or [cleaned]
+    wrapped_lines: List[str] = []
+    for raw_line in raw_lines:
+        stripped = raw_line.rstrip()
+        wrapped = textwrap.wrap(
+            stripped,
+            width=max_chars_per_line,
+            replace_whitespace=False,
+            drop_whitespace=False,
+        )
+        if not wrapped:
+            wrapped_lines.append("")
+        else:
+            wrapped_lines.extend(wrapped)
+    if not wrapped_lines:
+        wrapped_lines = [""]
+
+    pages: List[List[str]] = [
+        wrapped_lines[i : i + max_lines]
+        for i in range(0, len(wrapped_lines), max_lines)
+    ]
+    if not pages:
+        pages = [[""]]
+
+    objects: Dict[int, bytes] = {}
+    next_id = 1
+
+    def _add_object(body: Any = b"") -> int:
+        nonlocal next_id
+        oid = next_id
+        next_id += 1
+        if isinstance(body, bytes):
+            objects[oid] = body
+        else:
+            objects[oid] = str(body).encode("latin-1")
+        return oid
+
+    def _set_object(oid: int, body: Any) -> None:
+        if isinstance(body, bytes):
+            objects[oid] = body
+        else:
+            objects[oid] = str(body).encode("latin-1")
+
+    catalog_id = _add_object()
+    pages_id = _add_object()
+    font_id = _add_object(
+        "<< /Type /Font /Subtype /Type1 /Name /F1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>"
+    )
+
+    page_ids: List[int] = []
+    for page_lines in pages:
+        lines_for_page = page_lines or [""]
+        ops = [
+            "BT",
+            f"/F1 {font_size} Tf",
+            f"{leading} TL",
+            f"{margin} {page_height - margin} Td",
+        ]
+        for idx, line in enumerate(lines_for_page):
+            if idx > 0:
+                ops.append("T*")
+            ops.append(f"({_escape_pdf_text_value(line)}) Tj")
+        ops.append("ET")
+        stream_bytes = "\n".join(ops).encode("latin-1")
+        content_stream = (
+            f"<< /Length {len(stream_bytes)} >>\nstream\n".encode("latin-1")
+            + stream_bytes
+            + b"\nendstream"
+        )
+        content_id = _add_object(content_stream)
+        page_dict = (
+            f"<< /Type /Page /Parent {pages_id} 0 R /MediaBox [0 0 {page_width} {page_height}] "
+            f"/Contents {content_id} 0 R /Resources << /Font << /F1 {font_id} 0 R >> >> >>"
+        )
+        page_ids.append(_add_object(page_dict))
+
+    kids = " ".join(f"{pid} 0 R" for pid in page_ids)
+    _set_object(pages_id, f"<< /Type /Pages /Count {len(page_ids)} /Kids [{kids}] >>")
+    _set_object(catalog_id, f"<< /Type /Catalog /Pages {pages_id} 0 R >>")
+
+    output = BytesIO()
+    output.write(b"%PDF-1.4\n")
+    positions = [0] * next_id
+    for oid in range(1, next_id):
+        positions[oid] = output.tell()
+        output.write(f"{oid} 0 obj\n".encode("latin-1"))
+        output.write(objects[oid])
+        output.write(b"\nendobj\n")
+    xref_offset = output.tell()
+    output.write(f"xref\n0 {next_id}\n".encode("latin-1"))
+    output.write(b"0000000000 65535 f \n")
+    for oid in range(1, next_id):
+        output.write(f"{positions[oid]:010d} 00000 n \n".encode("latin-1"))
+    output.write(
+        f"trailer\n<< /Size {next_id} /Root {catalog_id} 0 R >>\nstartxref\n{xref_offset}\n%%EOF".encode(
+            "latin-1"
+        )
+    )
+    return output.getvalue()
+
+
+def extract_text_from_parts(parts: Sequence[Dict[str, Any]]) -> str:
+    """Collect the textual segments from message parts."""
+    texts: List[str] = []
+    for part in parts:
+        if not isinstance(part, dict):
+            continue
+        if part.get("type") != "text":
+            continue
+        value = part.get("value")
+        if isinstance(value, str):
+            stripped = value.strip()
+            if stripped:
+                texts.append(stripped)
+    return "\n\n".join(texts).strip()
+
+
+def render_download_controls(text: str, filename_prefix: str, key_suffix: str) -> None:
+    """Render download buttons for plain-text and PDF exports."""
+    safe_text = (text or "").strip()
+    if not safe_text:
+        return
+    safe_prefix = (filename_prefix or "cbai-response").strip().replace(" ", "-") or "cbai-response"
+    txt_bytes = safe_text.encode("utf-8")
+    pdf_bytes = create_pdf_from_text(safe_text)
+    col1, col2 = st.columns(2)
+    with col1:
+        st.download_button(
+            "⬇️ Download .txt",
+            data=txt_bytes,
+            file_name=f"{safe_prefix}.txt",
+            mime="text/plain",
+            key=f"txt_{key_suffix}",
+            use_container_width=True,
+        )
+    with col2:
+        st.download_button(
+            "⬇️ Download .pdf",
+            data=pdf_bytes,
+            file_name=f"{safe_prefix}.pdf",
+            mime="application/pdf",
+            key=f"pdf_{key_suffix}",
+            use_container_width=True,
+        )
+
+
+# --------------------------------------
 # Message rendering
 # --------------------------------------
 def avatar_for_role(role: str) -> str:
@@ -481,10 +649,11 @@ def avatar_for_role(role: str) -> str:
     return "🤔" if role == "user" else "👨🏻‍⚕️"
 
 
-def render_message(message: Dict, show_images: bool = False) -> None:
+def render_message(message: Dict, show_images: bool = False, index: Optional[int] = None) -> None:
     """Render a chat message with its parts."""
     role = message.get("role", "assistant")
     parts: List[Dict] = message.get("parts", [])
+    download_text = extract_text_from_parts(parts) if role == "assistant" else ""
 
     with st.chat_message(role, avatar=avatar_for_role(role)):
         for part in parts:
@@ -499,6 +668,12 @@ def render_message(message: Dict, show_images: bool = False) -> None:
                     st.image(data["url"], caption=data.get("name"), use_container_width=True)
             elif ptype == "error":
                 st.error(part.get("value", "An unknown error occurred."))
+        if role == "assistant" and download_text:
+            suffix = str(index) if index is not None else f"latest_{id(message)}"
+            prefix = (
+                f"cbai-response-{index + 1}" if index is not None else "cbai-response-latest"
+            )
+            render_download_controls(download_text, prefix, suffix)
 
 
 # --------------------------------------
@@ -693,8 +868,8 @@ def main() -> None:
             )
 
     # Render chat history
-    for message in st.session_state.messages:
-        render_message(message, show_images=True)
+    for idx, message in enumerate(st.session_state.messages):
+        render_message(message, show_images=True, index=idx)
 
     # Chat input
     chat_value = st.chat_input(
@@ -737,7 +912,7 @@ def main() -> None:
         # fallback: ignore clearing errors so app does not break
         pass
 
-    render_message(user_message, show_images=True)
+    render_message(user_message, show_images=True, index=len(st.session_state.messages) - 1)
 
     # Prepare API payload (AgentCore-compatible)
     payload = build_agent_request_payload(message_text, image_payloads)
@@ -848,6 +1023,13 @@ def main() -> None:
             assistant_parts.append({"type": "text", "value": assistant_text})
         else:
             text_placeholder.empty()
+
+        pending_index = len(st.session_state.messages)
+        render_download_controls(
+            assistant_text,
+            f"cbai-response-{pending_index + 1}",
+            f"live_{st.session_state.conversation_id}_{pending_index}",
+        )
 
         # Show any images in response
         content_items = []
