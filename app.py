@@ -18,7 +18,7 @@ load_dotenv(override=True)
 # --------------------------------------
 # Configuration
 # --------------------------------------
-st.set_page_config(page_title="Crystal Blood AI", page_icon="🤖", layout="centered")
+st.set_page_config(page_title="Crystal Blood AI 🩸", page_icon="🤖", layout="centered")
 RECENT_TURNS_LIMIT = 3
 AUTH_PASSWORD = os.getenv("AUTH_PASSWORD")  # 8-digit static password
 SESSION_MAX_AGE_SECONDS = 30 * 60  # 30 minutes
