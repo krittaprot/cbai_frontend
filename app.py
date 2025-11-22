@@ -760,7 +760,7 @@ def main() -> None:
                         <li>Use crisp, full-page images so every result row is legible.</li>
                         <li>Describe your pet's history or symptoms in plain language&mdash;medical jargon is optional.</li>
                         <li>Only the last 3 question/answer turns are kept for context, so restate key info if a conversation runs long.</li>
-                        <li>Try follow-ups like <em>"Why did the AI flag the potassium value?"</em> or <em>"What should I monitor after these CBC results?"</em></li>
+                        <li>Try follow-ups like <em>"Why did you flag the potassium value?"</em> or <em>"What should I monitor after these CBC results?"</em></li>
                     </ul>
                 </div>
                 """,
