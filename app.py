@@ -538,7 +538,7 @@ def render_download_controls(text: str, filename_prefix: str, key_suffix: str) -
             }}
         </style>
         <div id="{container_id}">
-            <div class="download-title">Save this AI summary</div>
+            <div class="download-title">Save this AI response.</div>
             <a class="download-btn" download="{safe_prefix}.txt" href="data:text/plain;base64,{encoded}">⬇️ Download as TXT</a>
         </div>
     """
