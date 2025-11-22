@@ -743,9 +743,9 @@ def main() -> None:
                 <div class="tips-box primary">
                     <h4 class="tips-title">🚀 Quickstart</h4>
                     <ul>
-                        <li>Upload CBC, biochemistry, and/or blood gas reports (PNG, JPG, JPEG). Send one, two, or all three together.</li>
-                        <li>Crystal Blood AI reads every panel, flags abnormal patterns, and prepares an initial explanation.</li>
-                        <li>After you review the AI output, ask specific follow-up questions to dive deeper into the highlighted values.</li>
+                        <li><strong>1. เตรียมไฟล์:</strong> อัปโหลดผล CBC, blood chemistry หรือ blood gas จากโรงพยาบาลหรือแล็บไทย (PNG, JPG, JPEG หรือรูปถ่ายมือถือก็ได้).</li>
+                        <li><strong>2. ให้ AI สรุป:</strong> Crystal Blood AI อ่านทุกพาเนล ระบุค่าสูง/ต่ำ และสร้างสรุปที่ช่วยบรีฟให้ทีมรักษา.</li>
+                        <li><strong>3. คุยต่อ:</strong> ตรวจผลเบื้องต้น แล้วพิมพ์คำถามเป็นไทยหรืออังกฤษเพื่อเจาะค่าที่อยากให้ขยาย.</li>
                     </ul>
                 </div>
                 """,
@@ -757,10 +757,10 @@ def main() -> None:
                 <div class="tips-box secondary">
                     <h4 class="tips-title">💡 Helpful Tips</h4>
                     <ul>
-                        <li>Use crisp, full-page images so every result row is legible.</li>
-                        <li>Describe your pet's history or symptoms in plain language&mdash;medical jargon is optional.</li>
-                        <li>Only the last 3 question/answer turns are kept for context, so restate key info if a conversation runs long.</li>
-                        <li>Try follow-ups like <em>"Why did you flag the potassium value?"</em> or <em>"What should I monitor after these CBC results?"</em></li>
+                        <li>ถ่ายภาพเต็มใบรายงานหรือ export ไฟล์ที่ชัดเจน ไม่ให้เงาหรือแฟลชบังค่าตรวจ.</li>
+                        <li>ใส่บริบทสั้นๆ เช่น สายพันธุ์ อายุ น้ำหนัก อาการเริ่มต้น และยาที่ใช้อยู่ เพื่อให้คำแนะนำแม่นขึ้น.</li>
+                        <li>ระบบจำได้แค่ 3 รอบถาม-ตอบล่าสุด ถ้าคุยนานให้ทวนผลสำคัญหรือค่าที่อยากติดตามอีกครั้ง.</li>
+                        <li>ลองถามต่อ เช่น <em>"ควรเฝ้าระวังค่า ALT เท่าไรหลังเปลี่ยนอาหาร?"</em> หรือ <em>"ค่าเกล็ดต่ำแบบนี้เสี่ยงอะไรในไทยบางแก้ว?"</em></li>
                     </ul>
                 </div>
                 """,
