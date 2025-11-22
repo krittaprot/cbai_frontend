@@ -529,14 +529,14 @@ def create_pdf_from_text(text: str) -> bytes:
         if isinstance(body, bytes):
             objects[oid] = body
         else:
-            objects[oid] = str(body).encode("latin-1")
+            objects[oid] = str(body).encode("latin-1", "replace")
         return oid
 
     def _set_object(oid: int, body: Any) -> None:
         if isinstance(body, bytes):
             objects[oid] = body
         else:
-            objects[oid] = str(body).encode("latin-1")
+            objects[oid] = str(body).encode("latin-1", "replace")
 
     catalog_id = _add_object()
     pages_id = _add_object()
@@ -558,7 +558,7 @@ def create_pdf_from_text(text: str) -> bytes:
                 ops.append("T*")
             ops.append(f"({_escape_pdf_text_value(line)}) Tj")
         ops.append("ET")
-        stream_bytes = "\n".join(ops).encode("latin-1")
+        stream_bytes = "\n".join(ops).encode("latin-1", "replace")
         content_stream = (
             f"<< /Length {len(stream_bytes)} >>\nstream\n".encode("latin-1")
             + stream_bytes
@@ -797,7 +797,7 @@ def main() -> None:
         return
     sidebar_controls()
 
-    st.title("Crystal Blood AI")
+    st.title("Crystal Blood AI 🩸")
     st.caption("Upload pet blood test reports and get veterinary AI insights.")
 
     # create a single placeholder for the center tips so we can clear it immediately
