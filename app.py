@@ -566,31 +566,20 @@ def invoke_backend(backend_url: str, payload: Dict[str, Any], session_id: str) -
 def render_backend_status() -> None:
     """Render compact backend status indicator."""
     st.sidebar.divider()
-    backend_url = st.sidebar.text_input(
-        "Backend URL",
-        value=st.session_state.backend_url,
-        key="backend_url_input",
-    ).strip().rstrip("/")
-    if backend_url and backend_url != st.session_state.backend_url:
-        st.session_state.backend_url = backend_url
-        st.session_state.backend_status = "unknown"
-        st.session_state.backend_latency_ms = None
+    st.sidebar.subheader("Server Status")
+    backend_url = (st.session_state.backend_url or "").strip().rstrip("/")
+    st.session_state.backend_url = backend_url
 
     is_agentcore = _is_agentcore_endpoint(backend_url)
-    status = "agentcore" if is_agentcore else st.session_state.backend_status
-    latency = st.session_state.backend_latency_ms if not is_agentcore else None
+    status = "ok" if is_agentcore else st.session_state.backend_status
+    is_online = status != "error"
 
-    if status == "agentcore":
-        st.sidebar.success("🟢 AgentCore (AWS)", icon="✅")
-        st.sidebar.caption("Authenticates via Auth0 client credentials.")
-    elif status == "ok":
-        st.sidebar.success(f"🟢 Online ({latency}ms)" if latency else "🟢 Online", icon="✅")
-    elif status == "error":
-        st.sidebar.error("🔴 Offline", icon="❌")
+    if is_online:
+        st.sidebar.success("🟢 Online", icon="✅")
     else:
-        st.sidebar.info("Launched", icon="ℹ️")
+        st.sidebar.error("🔴 Offline", icon="❌")
 
-    if not is_agentcore and st.sidebar.button("Check Connection", use_container_width=True):
+    if not is_agentcore and st.sidebar.button("Refresh Status", use_container_width=True):
         with st.spinner(""):
             status, latency = check_backend_health(st.session_state.backend_url)
             st.session_state.backend_status = status
@@ -673,14 +662,11 @@ def main() -> None:
             st.markdown(
                 """
                 <div class="tips-box primary">
-                    <h4 class="tips-title">🐾 เริ่มต้นอย่างรวดเร็ว</h4>
+                    <h4 class="tips-title">🚀 Quickstart</h4>
                     <ul>
-                        <li>อัปโหลด <strong>ผลตรวจเลือดของสัตว์เลี้ยง</strong> (PNG, JPG, JPEG).</li>
-                        <li>ถามคำถามได้ เช่น:<br />
-                            • <em>"ค่า ALT สูงในแมวหมายถึงอะไร?"</em><br />
-                            • <em>"เม็ดเลือดแดงของสุนัขฉันอยู่ในเกณฑ์ปกติไหม?"</em>
-                        </li>
-                        <li>Crystal Blood AI จะอธิบายความหมายของค่าตรวจและแจ้งเตือนปัญหาสุขภาพที่อาจเกิดขึ้น.</li>
+                        <li>Upload CBC, biochemistry, and/or blood gas reports (PNG, JPG, JPEG). Send one, two, or all three together.</li>
+                        <li>Crystal Blood AI reads every panel, flags abnormal patterns, and prepares an initial explanation.</li>
+                        <li>After you review the AI output, ask specific follow-up questions to dive deeper into the highlighted values.</li>
                     </ul>
                 </div>
                 """,
@@ -690,12 +676,12 @@ def main() -> None:
             st.markdown(
                 """
                 <div class="tips-box secondary">
-                    <h4 class="tips-title">💡 เคล็ดลับที่เป็นประโยชน์</h4>
+                    <h4 class="tips-title">💡 Helpful Tips</h4>
                     <ul>
-                        <li>ใช้ภาพที่ชัดเจนเต็มหน้าเพื่อความแม่นยำสูงสุด.</li>
-                        <li>ถามได้ด้วยภาษาธรรมดา ไม่จำเป็นต้องใช้ศัพท์แพทย์.</li>
-                        <li>ลองถาม: <em>"สรุปค่าตับของสุนัขฉันให้หน่อย"</em> หรือ <em>"อะไรทำให้เกล็ดเลือดต่ำได้บ้าง?"</em></li>
-                        <li>รวมหลายรายงานเพื่อดูแนวโน้มตามกาลเวลา.</li>
+                        <li>Use crisp, full-page images so every result row is legible.</li>
+                        <li>Describe your pet's history or symptoms in plain language&mdash;medical jargon is optional.</li>
+                        <li>Only the last 3 question/answer turns are kept for context, so restate key info if a conversation runs long.</li>
+                        <li>Try follow-ups like <em>"Why did the AI flag the potassium value?"</em> or <em>"What should I monitor after these CBC results?"</em></li>
                     </ul>
                 </div>
                 """,
@@ -703,7 +689,7 @@ def main() -> None:
             )
 
             st.caption(
-                "Crystal Blood AI ช่วยสัตวแพทย์และผู้เลี้ยงตีความผลแล็บ ด้วยคำอธิบายเข้าใจง่ายและข้อเสนอแนะที่นำไปใช้ได้ทั้งสำหรับสุนัขและแมว."
+                "Crystal Blood AI helps veterinarians and pet parents interpret lab work with clear, actionable explanations for cats and dogs."
             )
 
     # Render chat history
