@@ -550,7 +550,7 @@ def render_download_controls(text: str, filename_prefix: str, key_suffix: str) -
 # --------------------------------------
 def avatar_for_role(role: str) -> str:
     """Return emoji avatar for message role."""
-    return "🤔" if role == "user" else "👨🏻‍⚕️"
+    return "🤔" if role == "user" else "👩‍⚕️"
 
 
 def render_message(message: Dict, show_images: bool = False, index: Optional[int] = None) -> None:
